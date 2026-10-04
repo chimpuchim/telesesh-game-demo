@@ -222,7 +222,7 @@ WebSocket support works. A Render Blueprint is included:
 1. Push the repo to GitHub (done: `chimpuchim/telesesh-game-demo`).
 2. Open <https://render.com/deploy?repo=https://github.com/chimpuchim/telesesh-game-demo>,
    sign in with GitHub and approve the blueprint. `render.yaml` sets the build
-   (`npm ci && npm run build`), start (`npm start`), health check (`/healthz`) and `NODE_ENV`.
+   (`npm ci --include=dev && npm run build`), start (`npm start`), health check (`/healthz`) and `NODE_ENV`.
 3. A few minutes later the service answers at `https://<service-name>.onrender.com`. Share the
    bare URL: visitors land on the start page and can play straight away.
 

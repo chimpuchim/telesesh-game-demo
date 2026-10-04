@@ -5,7 +5,8 @@ services:
     name: telesesh-game-demo
     runtime: node
     plan: free
-    buildCommand: npm ci && npm run build
+    # NODE_ENV=production makes npm skip devDependencies; the build needs them (tsc, vite, tsx).
+    buildCommand: npm ci --include=dev && npm run build
     startCommand: npm start
     healthCheckPath: /healthz
     autoDeploy: true
