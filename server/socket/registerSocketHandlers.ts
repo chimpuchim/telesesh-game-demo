@@ -10,12 +10,15 @@ import type {
 import { loadGameConfig } from '../api/gameRepository.js';
 import type { SessionListener } from '../sessions/GameSession.js';
 import { SessionStore } from '../sessions/SessionStore.js';
+import { RateLimiter } from './RateLimiter.js';
 
 export type GameServer = Server<ClientToServerEvents, ServerToClientEvents>;
 type GameSocket = Socket<ClientToServerEvents, ServerToClientEvents>;
 
 const ROLES: ReadonlySet<string> = new Set<Role>(['therapist', 'student']);
 const CLIENT_ACTIONS: ReadonlySet<string> = new Set<ClientAction['type']>(['FLIP_CARD', 'RESET_GAME', 'NEW_ROUND']);
+/** Generous for humans, tight enough to stop a scripted flood. */
+const ACTION_LIMIT = { maxActions: 20, perMs: 1000 };
 
 function roomFor(sessionId: string): string {
   return `session:${sessionId}`;
@@ -40,6 +43,11 @@ function isClientAction(action: unknown): action is ClientAction {
   return true;
 }
 
+function actionLabel(action: unknown): ClientAction['type'] | 'UNKNOWN' {
+  const type = (action as { type?: unknown } | null)?.type;
+  return typeof type === 'string' && CLIENT_ACTIONS.has(type) ? (type as ClientAction['type']) : 'UNKNOWN';
+}
+
 export function registerSocketHandlers(io: GameServer): SessionStore {
   const listenerFor = (sessionId: string): SessionListener => ({
     onState: (snapshot, events) => {
@@ -54,7 +62,9 @@ export function registerSocketHandlers(io: GameServer): SessionStore {
   const store = new SessionStore(listenerFor);
 
   io.on('connection', (socket: GameSocket) => {
-    let joined: { sessionId: string } | null = null;
+    let joinedSessionId: string | null = null;
+    let disconnected = false;
+    const limiter = new RateLimiter(ACTION_LIMIT.maxActions, ACTION_LIMIT.perMs);
 
     socket.on('session:join', async (rawReq, ack) => {
       const req = validateJoin(rawReq);
@@ -66,10 +76,15 @@ export function registerSocketHandlers(io: GameServer): SessionStore {
         const existing = store.get(req.sessionId);
         // The first participant decides the game; late joiners receive whatever the session runs.
         const config = existing ? undefined : await loadGameConfig(req.gameId);
+        // The socket may have dropped while the config was loading; never add a ghost member.
+        if (disconnected) {
+          ack?.({ ok: false, error: 'Disconnected while joining' });
+          return;
+        }
         const session = existing ?? store.getOrCreate(req.sessionId, config!);
 
-        if (joined && joined.sessionId !== req.sessionId) leaveCurrent();
-        joined = { sessionId: req.sessionId };
+        if (joinedSessionId && joinedSessionId !== req.sessionId) leaveCurrent();
+        joinedSessionId = req.sessionId;
         await socket.join(roomFor(req.sessionId));
         session.join(socket.id, req.role);
         ack?.({ ok: true, snapshot: session.snapshot() });
@@ -80,31 +95,39 @@ export function registerSocketHandlers(io: GameServer): SessionStore {
     });
 
     socket.on('session:action', async (action) => {
-      if (!joined) return;
-      const session = store.get(joined.sessionId);
+      if (!joinedSessionId) return;
+      const session = store.get(joinedSessionId);
       if (!session) return;
-      if (!isClientAction(action)) {
-        socket.emit('session:rejected', { action: 'FLIP_CARD', reason: 'Malformed action' });
+      if (!limiter.allow()) {
+        socket.emit('session:rejected', { action: actionLabel(action), reason: 'Too many actions, slow down' });
         return;
       }
-      if (action.type !== 'NEW_ROUND') {
+      if (!isClientAction(action)) {
+        socket.emit('session:rejected', { action: actionLabel(action), reason: 'Malformed action' });
+        return;
+      }
+      // NEW_ROUND re-reads content from the (mock) backend; only do that work for a role allowed to use it.
+      if (action.type !== 'NEW_ROUND' || session.roleOf(socket.id) !== 'therapist') {
         session.dispatch(socket.id, action);
         return;
       }
-      // Reload content from the (mock) backend so admin edits reach the running session.
       try {
-        session.dispatch(socket.id, action, await loadGameConfig(action.gameId ?? session.gameId));
+        const config = await loadGameConfig(action.gameId ?? session.gameId);
+        if (!disconnected) session.dispatch(socket.id, action, config);
       } catch (err) {
         socket.emit('session:rejected', { action: action.type, reason: (err as Error).message });
       }
     });
 
-    socket.on('disconnect', () => leaveCurrent());
+    socket.on('disconnect', () => {
+      disconnected = true;
+      leaveCurrent();
+    });
 
     function leaveCurrent(): void {
-      if (!joined) return;
-      store.get(joined.sessionId)?.leave(socket.id);
-      joined = null;
+      if (!joinedSessionId) return;
+      store.get(joinedSessionId)?.leave(socket.id);
+      joinedSessionId = null;
     }
   });
 

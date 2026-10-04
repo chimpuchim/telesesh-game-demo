@@ -1,3 +1,12 @@
+/** Per-game settings of the memory template (comes from the JSON config). */
+export interface MemorySettings {
+  rows: number;
+  columns: number;
+  /** How long two mismatched cards stay revealed before flipping back. */
+  mismatchRevealMs: number;
+  pointsPerMatch: number;
+}
+
 /** Authoritative state of one memory-matching round. Owned by the server. */
 export type CardFace = 'hidden' | 'flipped' | 'matched';
 

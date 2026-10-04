@@ -1,5 +1,5 @@
 import type { GameConfig } from '../../shared/types/gameConfig.js';
-import type { ClientAction, GameEvent, Participants, Role, SessionSnapshot } from '../../shared/types/protocol.js';
+import type { ClientAction, GameEvent, GameState, Participants, Role, SessionSnapshot } from '../../shared/types/protocol.js';
 import type { GameTemplate } from '../templates/GameTemplate.js';
 import { getTemplate } from '../templates/registry.js';
 
@@ -14,8 +14,8 @@ export interface SessionListener {
  * the transport layer. Knows nothing about Socket.IO.
  */
 export class GameSession {
-  private readonly template: GameTemplate<unknown, ClientAction>;
-  private state: unknown;
+  private readonly template: GameTemplate<GameState, ClientAction>;
+  private state: GameState;
   private version = 0;
   private readonly timers = new Set<ReturnType<typeof setTimeout>>();
   private readonly members = new Map<string, Role>();
@@ -41,6 +41,10 @@ export class GameSession {
   /** How long the room has been empty, or null while someone is connected. */
   get idleMs(): number | null {
     return this.emptySince === null ? null : Date.now() - this.emptySince;
+  }
+
+  roleOf(socketId: string): Role | undefined {
+    return this.members.get(socketId);
   }
 
   join(socketId: string, role: Role): void {
@@ -91,7 +95,7 @@ export class GameSession {
       sessionId: this.sessionId,
       gameId: this.config.gameId,
       config: this.config,
-      state: this.state as SessionSnapshot['state'],
+      state: this.state,
       serverTime: Date.now(),
       version: this.version,
       participants: this.participants(),
@@ -102,7 +106,7 @@ export class GameSession {
     this.clearTimers();
   }
 
-  private commit(state: unknown, events: GameEvent[], effects: { delayMs: number; action: ClientAction }[]): void {
+  private commit(state: GameState, events: GameEvent[], effects: { delayMs: number; action: ClientAction }[]): void {
     this.state = state;
     this.version++;
     this.listener.onState(this.snapshot(), events);

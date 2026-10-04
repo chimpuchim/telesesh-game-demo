@@ -1,5 +1,5 @@
 import type { GameConfig, GameItem } from '../../../shared/types/gameConfig.js';
-import type { MemoryAction, MemoryCard, MemoryState } from '../../../shared/types/memoryState.js';
+import type { MemoryAction, MemoryCard, MemorySettings, MemoryState } from '../../../shared/types/memoryState.js';
 import type { GameEvent, Role } from '../../../shared/types/protocol.js';
 import type { GameTemplate, ReduceContext, ReduceResult, ScheduledEffect } from '../GameTemplate.js';
 
@@ -26,8 +26,14 @@ function shuffle<T>(items: T[]): T[] {
   return copy;
 }
 
+/** The config's settings once `validateConfig` has accepted them. */
+function settingsOf(config: GameConfig): MemorySettings {
+  return config.settings;
+}
+
 function dealCards(config: GameConfig): MemoryCard[] {
-  const pairCount = (config.settings.rows * config.settings.columns) / 2;
+  const { rows, columns } = settingsOf(config);
+  const pairCount = (rows * columns) / 2;
   const chosen: GameItem[] = shuffle(config.items).slice(0, pairCount);
   const itemIds = shuffle([...chosen, ...chosen].map((item) => item.id));
   return itemIds.map((itemId, index) => ({ index, itemId, face: 'hidden' }));
@@ -41,10 +47,13 @@ export class MemoryTemplate implements GameTemplate<MemoryState, MemoryAction> {
   readonly id = 'memory';
 
   validateConfig(config: GameConfig): void {
-    const { rows, columns } = config.settings;
+    const { rows, columns, mismatchRevealMs, pointsPerMatch } = settingsOf(config);
     const cells = rows * columns;
     if (!Number.isInteger(rows) || !Number.isInteger(columns) || rows < 1 || columns < 1) {
       throw new Error(`"${config.gameId}": rows/columns must be positive integers`);
+    }
+    if (!(mismatchRevealMs >= 0) || !(pointsPerMatch >= 0)) {
+      throw new Error(`"${config.gameId}": mismatchRevealMs and pointsPerMatch must be non-negative numbers`);
     }
     if (cells % 2 !== 0) {
       throw new Error(`"${config.gameId}": rows x columns must be even (got ${cells})`);
@@ -121,7 +130,7 @@ export class MemoryTemplate implements GameTemplate<MemoryState, MemoryAction> {
         cards: setFace(next.cards, flippedCards, 'matched'),
         flippedCards: [],
         matchedCards,
-        score: state.score + ctx.config.settings.pointsPerMatch,
+        score: state.score + settingsOf(ctx.config).pointsPerMatch,
         status: completed ? 'completed' : 'playing',
         completedAt: completed ? ctx.now : null,
       };
@@ -134,7 +143,7 @@ export class MemoryTemplate implements GameTemplate<MemoryState, MemoryAction> {
     return ok(
       next,
       [{ type: 'MISMATCH', cardIndexes: flippedCards }],
-      [{ delayMs: ctx.config.settings.mismatchRevealMs, action: { type: 'RESOLVE_MISMATCH', round: state.round } }],
+      [{ delayMs: settingsOf(ctx.config).mismatchRevealMs, action: { type: 'RESOLVE_MISMATCH', round: state.round } }],
     );
   }
 

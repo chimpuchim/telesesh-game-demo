@@ -32,6 +32,8 @@ export class SessionClient {
   readonly onEvent = new Emitter<GameEvent>();
   readonly onRejected = new Emitter<ActionRejected>();
   readonly onStatus = new Emitter<ConnectionStatus>();
+  /** The server refused the join (bad session/game id, unknown game...). */
+  readonly onJoinError = new Emitter<string>();
 
   private readonly socket: Socket<ServerToClientEvents, ClientToServerEvents>;
   private lastVersion = -1;
@@ -92,7 +94,7 @@ export class SessionClient {
       (ack) => {
         if (!ack.ok) {
           console.error('[session] join rejected:', ack.error);
-          this.onRejected.emit({ action: 'FLIP_CARD', reason: ack.error });
+          this.onJoinError.emit(ack.error);
           return;
         }
         this.acceptSnapshot(ack.snapshot);

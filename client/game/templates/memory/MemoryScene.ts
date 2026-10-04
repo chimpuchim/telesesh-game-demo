@@ -1,16 +1,11 @@
 import Phaser from 'phaser';
 import type { GameConfig } from '../../../../shared/types/gameConfig.js';
-import type { MemoryState } from '../../../../shared/types/memoryState.js';
-import type { GameEvent } from '../../../../shared/types/protocol.js';
+import type { MemorySettings, MemoryState } from '../../../../shared/types/memoryState.js';
+import type { ClientAction, GameEvent, GameState } from '../../../../shared/types/protocol.js';
 import type { SoundService } from '../../services/SoundService.js';
+import type { TemplateScene, TemplateSceneData } from '../TemplateScene.js';
 import { CardView } from './CardView.js';
 import { computeBoardLayout } from './boardLayout.js';
-
-export interface MemorySceneData {
-  config: GameConfig;
-  sound: SoundService;
-  onFlip: (cardIndex: number) => void;
-}
 
 export const MEMORY_SCENE_KEY = 'MemoryScene';
 
@@ -18,10 +13,11 @@ export const MEMORY_SCENE_KEY = 'MemoryScene';
  * Renders the authoritative MemoryState. The scene never decides game rules:
  * it animates towards whatever snapshot the server sends and reports taps.
  */
-export class MemoryScene extends Phaser.Scene {
+export class MemoryScene extends Phaser.Scene implements TemplateScene {
   private config!: GameConfig;
+  private settings!: MemorySettings;
   private sound_!: SoundService;
-  private onFlip!: (cardIndex: number) => void;
+  private sendAction!: (action: ClientAction) => void;
   private cards: CardView[] = [];
   private round = -1;
   private pendingFlip: number | null = null;
@@ -34,10 +30,11 @@ export class MemoryScene extends Phaser.Scene {
     super(MEMORY_SCENE_KEY);
   }
 
-  init(data: MemorySceneData): void {
+  init(data: TemplateSceneData): void {
     this.config = data.config;
+    this.settings = data.config.settings;
     this.sound_ = data.sound;
-    this.onFlip = data.onFlip;
+    this.sendAction = data.onAction;
     this.cards = [];
     this.round = -1;
     this.lastState = null;
@@ -58,7 +55,7 @@ export class MemoryScene extends Phaser.Scene {
     if (this.queued) this.applyState(this.queued);
   }
 
-  applyState(state: MemoryState): void {
+  applyState(state: GameState): void {
     if (!this.ready) {
       this.queued = state;
       return;
@@ -119,7 +116,7 @@ export class MemoryScene extends Phaser.Scene {
     this.pendingFlip = cardIndex;
     // Guard against a lost action: unlock after a moment if no snapshot arrives.
     this.pendingTimer = this.time.delayedCall(1200, () => this.clearPending());
-    this.onFlip(cardIndex);
+    this.sendAction({ type: 'FLIP_CARD', cardIndex });
     this.updateInput();
   }
 
@@ -136,7 +133,7 @@ export class MemoryScene extends Phaser.Scene {
   }
 
   private layout(): void {
-    const { rows, columns } = this.config.settings;
+    const { rows, columns } = this.settings;
     const { width, height } = this.scale.gameSize;
     const padding = Math.max(12, Math.min(width, height) * 0.04);
     const l = computeBoardLayout(width, height, rows, columns, padding);

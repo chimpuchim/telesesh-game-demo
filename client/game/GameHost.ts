@@ -1,8 +1,8 @@
 import Phaser from 'phaser';
-import type { GameEvent, SessionSnapshot } from '../../shared/types/protocol.js';
+import type { ClientAction, GameEvent, SessionSnapshot } from '../../shared/types/protocol.js';
 import type { SoundService } from './services/SoundService.js';
-import { MemoryScene } from './templates/memory/MemoryScene.js';
 import { TEMPLATE_REGISTRY } from './templates/registry.js';
+import type { TemplateScene, TemplateSceneData } from './templates/TemplateScene.js';
 
 /**
  * Owns the Phaser.Game instance, keeps the canvas crisp on hi-DPI screens and
@@ -20,7 +20,7 @@ export class GameHost {
   constructor(
     private readonly parent: HTMLElement,
     private readonly sound: SoundService,
-    private readonly onFlip: (cardIndex: number) => void,
+    private readonly onAction: (action: ClientAction) => void,
   ) {
     this.game = new Phaser.Game({
       type: Phaser.AUTO,
@@ -64,13 +64,14 @@ export class GameHost {
     if (this.activeSceneKey) this.game.scene.stop(this.activeSceneKey);
     this.activeConfigKey = JSON.stringify(snapshot.config);
     this.activeSceneKey = entry.sceneKey;
-    this.game.scene.start(entry.sceneKey, { config: snapshot.config, sound: this.sound, onFlip: this.onFlip });
+    const data: TemplateSceneData = { config: snapshot.config, sound: this.sound, onAction: this.onAction };
+    this.game.scene.start(entry.sceneKey, data);
   }
 
-  private activeScene(): MemoryScene | null {
+  private activeScene(): TemplateScene | null {
     if (!this.activeSceneKey) return null;
-    const scene = this.game.scene.getScene(this.activeSceneKey);
-    return scene instanceof MemoryScene ? scene : null;
+    // Every registered scene class implements TemplateScene (enforced by the registry's type).
+    return (this.game.scene.getScene(this.activeSceneKey) as TemplateScene | null) ?? null;
   }
 
   private resize(): void {

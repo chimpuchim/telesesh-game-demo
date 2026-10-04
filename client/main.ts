@@ -28,7 +28,7 @@ async function bootstrap(): Promise<void> {
   });
   const stats = new StatsBar(mustGet('stats'), () => session.serverNow());
   const overlay = new CompletionOverlay(mustGet('overlay-root'), () => session.send({ type: 'RESET_GAME' }));
-  const host = new GameHost(mustGet('game-root'), sound, (cardIndex) => session.send({ type: 'FLIP_CARD', cardIndex }));
+  const host = new GameHost(mustGet('game-root'), sound, (action) => session.send(action));
 
   // Content comes from the API first (the same endpoint the customer's backend will expose),
   // then the session snapshot carries the authoritative config everyone in the room shares.
@@ -76,8 +76,10 @@ async function bootstrap(): Promise<void> {
   });
   session.onEvent.on((event) => host.handleEvent(event));
   session.onRejected.on(({ action, reason }) => {
+    // Flip rejections are routine (two players, one board); everything else deserves a message.
     if (action !== 'FLIP_CARD') toaster.show(reason, 'warn');
   });
+  session.onJoinError.on((message) => loading.fail(`Could not join the session: ${message}`));
   session.onStatus.on((status) => {
     header.setStatus(status);
     if (status === 'reconnecting') toaster.show('Connection lost, reconnecting...', 'warn', 1500);
@@ -88,7 +90,11 @@ async function bootstrap(): Promise<void> {
   if (import.meta.env.DEV) (window as unknown as { __session: SessionClient }).__session = session;
 }
 
-bootstrap().catch((err) => {
+bootstrap().catch((err: unknown) => {
   console.error(err);
-  document.body.insertAdjacentHTML('beforeend', `<p class="error-text" style="padding:20px">${String(err)}</p>`);
+  const p = document.createElement('p');
+  p.className = 'error-text';
+  p.style.padding = '20px';
+  p.textContent = err instanceof Error ? err.message : String(err);
+  document.body.append(p);
 });

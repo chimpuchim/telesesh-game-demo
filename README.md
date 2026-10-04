@@ -20,7 +20,8 @@ This demo proves the five things a production game platform for therapy sessions
 Extras that make it feel like a product rather than a prototype: flip, match and deal
 animations, synthesized sound effects (no copyrighted assets), connection indicator with
 automatic reconnect + resync, presence dots (who is in the room), a child-friendly completion
-screen with score / pairs / time / Play Again, and a crisp hi-DPI canvas.
+screen with score / pairs / time / Play Again, a crisp hi-DPI canvas, and a unit-test suite
+for the game rules and session layer (`npm test`, 25 tests, zero extra dependencies).
 
 ## Architecture
 
@@ -30,7 +31,8 @@ client/                      Phaser 3 + DOM UI (no framework)
   game/
     GameHost.ts              owns Phaser.Game, hi-DPI sizing, starts the right template scene
     templates/
-      registry.ts            template id -> Phaser scene (add new templates here)
+      TemplateScene.ts       the scene interface GameHost drives (applyState / handleEvent)
+      registry.ts            template id -> Phaser scene
       memory/
         MemoryScene.ts       renders MemoryState, reports taps, plays MATCH/MISMATCH effects
         CardView.ts          one card: flip / hover / pop / shake animations
@@ -52,17 +54,20 @@ server/
     SessionStore.ts          sessionId -> GameSession; isolates sessions, expires idle ones
     GameSession.ts           holds authoritative state, applies actions, runs scheduled effects
   socket/
-    registerSocketHandlers.ts  validates client messages, rooms, join/leave/action
+    registerSocketHandlers.ts  validates client messages, rooms, join/leave/action, rate limit
+    RateLimiter.ts           per-socket fixed-window limiter
   templates/
     GameTemplate.ts          the template interface: pure `createInitialState` + `reduce`
     memory/MemoryTemplate.ts memory-matching rules (flip, match, mismatch, reset, new round)
 
 shared/types/                contracts used by both sides
+  templates.ts               TemplateContracts: one entry per template -> all shared unions
   gameConfig.ts              JSON content schema
-  memoryState.ts             MemoryState + MemoryAction
+  memoryState.ts             MemorySettings + MemoryState + MemoryAction
   protocol.ts                Socket.IO events, SessionSnapshot, GameEvent
 
 data/games/                  memory-animals.json, memory-space.json
+tests/                       node:test suites for the reducer, GameSession, RateLimiter, layout
 ```
 
 ### Authoritative server state
@@ -90,14 +95,31 @@ Student tap ──FLIP_CARD──▶ GameSession.dispatch
 * Snapshots carry `serverTime`; the timer is computed from server timestamps so both screens
   agree. Out-of-order snapshots are dropped using `version`.
 * Sessions are Socket.IO rooms keyed by `sessionId`; `demo123` and `demo456` never share state.
+* Every socket has a small action rate limit (20 actions/second); `NEW_ROUND` only reaches the
+  content loader for the therapist role, so a student cannot force repeated disk/backend reads.
+* A socket that disconnects while its join is still loading content is never added to the
+  session, so participant counts stay accurate and empty sessions can expire.
 
 ### The template abstraction
 
 `GameTemplate<State, Action>` is a pure state machine with `validateConfig`, `createInitialState`
 and `reduce`. It knows nothing about sockets, timers or Phaser, so `GameSession`,
 `SessionStore`, `SessionClient` and the socket layer are reusable as-is for the next templates.
-Adding a template means: one reducer on the server, one Phaser scene on the client, and one line
-in each registry.
+
+Adding a template (say `bingo`) touches exactly these places, and the compiler points at each
+one until it is done:
+
+1. `shared/types/bingoState.ts`: its settings, state and action types.
+2. `shared/types/templates.ts`: add `bingo: { settings, state, action }` to `TemplateContracts`.
+   Every shared union (`GameTemplateId`, `TemplateSettings`, `GameState`, `ClientAction`) derives
+   from this map, so nothing else in `shared/` changes.
+3. `server/templates/bingo/BingoTemplate.ts` implementing `GameTemplate`, registered in
+   `server/templates/registry.ts` (the registry type requires one entry per contract).
+4. `client/game/templates/bingo/BingoScene.ts` implementing `TemplateScene`, registered in
+   `client/game/templates/registry.ts` (same compile-time guarantee).
+
+`GameSession`, the socket layer, `SessionClient` and `GameHost` are untouched; the action
+validator in `registerSocketHandlers.ts` lists the accepted action type names and gets one line.
 
 ### JSON / API-driven content
 
@@ -138,10 +160,19 @@ This starts both processes with prefixed logs:
 Other scripts:
 
 ```bash
-npm run typecheck   # strict TypeScript for client + server
-npm run build       # typecheck, Vite production build, compile server to dist/
+npm test            # unit tests (node:test + tsx): game rules, session timers, rate limiter, layout
+npm run typecheck   # strict TypeScript for client, server and tests
+npm run build       # typecheck + tests, Vite production build, compile server to dist/
 npm start           # serve the production build from a single Node process on :3001
 ```
+
+### Tests
+
+`tests/memoryTemplate.test.ts` covers the rules (dealing, flip validation, match, mismatch lock,
+stale `RESOLVE_MISMATCH`, role gating, Play Again, completion). `tests/gameSession.test.ts`
+covers the session layer with real timers (mismatch flip-back, reset cancelling a pending timer,
+atomic config swap on `NEW_ROUND`, template switch refusal). The reducer is pure, so new rules
+are a few lines of test each.
 
 ## Testing real-time sync
 
@@ -189,8 +220,8 @@ Deliberately **not** implemented in the demo, but the architecture leaves clear 
 * **Persistent / shared state.** `SessionStore` is in-memory. Back it with Redis (state +
   pub/sub, using the Socket.IO Redis adapter) to survive restarts and scale horizontally;
   the `GameSession`/`GameTemplate` boundary already keeps state serialisable JSON.
-* **Rate limiting & abuse protection** per socket and per IP (actions are already validated and
-  role-gated; a limiter is a small middleware in `registerSocketHandlers`).
+* **Rate limiting & abuse protection.** A per-socket limiter exists; production adds per-IP
+  limits at the edge, connection caps per session and payload size limits.
 * **Backend integration.** Replace `gameRepository.ts` with calls to the customer's content API
   (and cache responses). The JSON contract in `shared/types/gameConfig.ts` is the integration point.
 * **Asset CDN.** Item `image` URLs and theme backgrounds would point at a CDN; Phaser preloads

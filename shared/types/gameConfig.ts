@@ -3,7 +3,9 @@
  * customer's backend. Everything the game shows (theme, items, board size)
  * comes from here; gameplay code never hardcodes it.
  */
-export type GameTemplateId = 'memory';
+import type { GameTemplateId, TemplateSettings } from './templates.js';
+
+export type { GameTemplateId } from './templates.js';
 
 export interface GameTheme {
   name: string;
@@ -27,19 +29,12 @@ export interface GameItem {
   image?: string;
 }
 
-export interface MemorySettings {
-  rows: number;
-  columns: number;
-  /** How long two mismatched cards stay revealed before flipping back. */
-  mismatchRevealMs: number;
-  pointsPerMatch: number;
-}
-
 export interface GameConfig {
   gameId: string;
   template: GameTemplateId;
   title: string;
   theme: GameTheme;
-  settings: MemorySettings;
+  /** Template-specific settings; the template validates and narrows them. */
+  settings: TemplateSettings;
   items: GameItem[];
 }

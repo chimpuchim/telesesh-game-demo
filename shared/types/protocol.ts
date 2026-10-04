@@ -1,17 +1,16 @@
 import type { GameConfig } from './gameConfig.js';
-import type { MemoryAction, MemoryState } from './memoryState.js';
+import type { ClientAction, GameState } from './templates.js';
+
+export type { ClientAction, GameState } from './templates.js';
 
 export type Role = 'therapist' | 'student';
-
-/** Actions a client may send. Each template adds its own union here. */
-export type ClientAction = MemoryAction;
 
 /** Full snapshot of a session. This is the only thing the server ever sends about game state. */
 export interface SessionSnapshot {
   sessionId: string;
   gameId: string;
   config: GameConfig;
-  state: MemoryState;
+  state: GameState;
   /** Server clock at send time; clients use it to align timers. */
   serverTime: number;
   /** Monotonic per-session version so clients can drop out-of-order snapshots. */
@@ -32,7 +31,8 @@ export interface JoinSessionRequest {
 }
 
 export interface ActionRejected {
-  action: ClientAction['type'];
+  /** The action type as sent, or 'UNKNOWN' when the payload was unreadable. */
+  action: ClientAction['type'] | 'UNKNOWN';
   reason: string;
 }
 
