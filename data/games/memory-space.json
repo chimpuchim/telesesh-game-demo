@@ -1,0 +1,33 @@
+{
+  "gameId": "memory-space",
+  "template": "memory",
+  "title": "Space Match",
+  "theme": {
+    "name": "Space",
+    "background": "radial-gradient(ellipse at 30% 20%, #3b2a6e 0%, #1a1340 45%, #070417 100%)",
+    "primaryColor": "#8be9fd",
+    "secondaryColor": "#ff79c6",
+    "cardBackColor": "#2d2466",
+    "cardFaceColor": "#f4f1ff",
+    "cardBackSymbol": "✦",
+    "textColor": "#ffffff"
+  },
+  "settings": {
+    "rows": 4,
+    "columns": 4,
+    "mismatchRevealMs": 900,
+    "pointsPerMatch": 10
+  },
+  "items": [
+    { "id": "rocket", "label": "Rocket", "emoji": "🚀" },
+    { "id": "planet", "label": "Planet", "emoji": "🪐" },
+    { "id": "moon", "label": "Moon", "emoji": "🌙" },
+    { "id": "star", "label": "Star", "emoji": "⭐" },
+    { "id": "astronaut", "label": "Astronaut", "emoji": "🧑‍🚀" },
+    { "id": "satellite", "label": "Satellite", "emoji": "🛰️" },
+    { "id": "comet", "label": "Comet", "emoji": "☄️" },
+    { "id": "alien", "label": "Alien", "emoji": "👽" },
+    { "id": "telescope", "label": "Telescope", "emoji": "🔭" },
+    { "id": "ufo", "label": "UFO", "emoji": "🛸" }
+  ]
+}

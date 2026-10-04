@@ -1,0 +1,33 @@
+{
+  "gameId": "memory-animals",
+  "template": "memory",
+  "title": "Animal Match",
+  "theme": {
+    "name": "Animals",
+    "background": "linear-gradient(160deg, #0f4c5c 0%, #1b7a6b 55%, #3aa17e 100%)",
+    "primaryColor": "#f6c453",
+    "secondaryColor": "#f28f3b",
+    "cardBackColor": "#1d6f72",
+    "cardFaceColor": "#fffaf0",
+    "cardBackSymbol": "❀",
+    "textColor": "#ffffff"
+  },
+  "settings": {
+    "rows": 4,
+    "columns": 4,
+    "mismatchRevealMs": 900,
+    "pointsPerMatch": 10
+  },
+  "items": [
+    { "id": "cat", "label": "Cat", "emoji": "🐱" },
+    { "id": "dog", "label": "Dog", "emoji": "🐶" },
+    { "id": "fox", "label": "Fox", "emoji": "🦊" },
+    { "id": "lion", "label": "Lion", "emoji": "🦁" },
+    { "id": "frog", "label": "Frog", "emoji": "🐸" },
+    { "id": "owl", "label": "Owl", "emoji": "🦉" },
+    { "id": "turtle", "label": "Turtle", "emoji": "🐢" },
+    { "id": "whale", "label": "Whale", "emoji": "🐳" },
+    { "id": "bee", "label": "Bee", "emoji": "🐝" },
+    { "id": "penguin", "label": "Penguin", "emoji": "🐧" }
+  ]
+}
