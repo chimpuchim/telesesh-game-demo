@@ -176,6 +176,10 @@ are a few lines of test each.
 
 ## Testing real-time sync
 
+Opening the bare URL (no `?session=`) shows a landing page that generates a session code, lets
+you pick the content, opens the therapist view and gives you the matching student link to open in
+a second tab, on a tablet or to send to a colleague. The explicit URLs below do the same thing.
+
 1. Run `npm run dev`.
 2. **Browser window 1 (Therapist):**
    `http://localhost:5173/?session=demo123&role=therapist`
@@ -209,6 +213,22 @@ session's config, so the therapist and student do not need to agree on the `game
 The therapist panel also has a **Game content** selector: choosing *Space Match* and pressing
 **New Round** switches the whole room to the other content live, which is the same code path an
 admin-driven backend would use.
+
+## Deploying a public demo link
+
+The server is a single Node process that also serves the built client, so any host with Node and
+WebSocket support works. A Render Blueprint is included:
+
+1. Push the repo to GitHub (done: `chimpuchim/telesesh-game-demo`).
+2. Open <https://render.com/deploy?repo=https://github.com/chimpuchim/telesesh-game-demo>,
+   sign in with GitHub and approve the blueprint. `render.yaml` sets the build
+   (`npm ci && npm run build`), start (`npm start`), health check (`/healthz`) and `NODE_ENV`.
+3. A few minutes later the service answers at `https://<service-name>.onrender.com`. Share the
+   bare URL: visitors land on the start page and can play straight away.
+
+Notes: the free plan sleeps after 15 idle minutes (first load then takes 30-50 s; a paid instance
+or an external uptime ping on `/healthz` avoids that), and because state is in memory the service
+must run as one instance, which is the default.
 
 ## Production considerations
 

@@ -7,12 +7,29 @@ import { applyTheme } from './ui/applyTheme.js';
 import { CompletionOverlay } from './ui/CompletionOverlay.js';
 import { mustGet } from './ui/dom.js';
 import { HeaderBar } from './ui/HeaderBar.js';
+import { LandingPage } from './ui/LandingPage.js';
 import { LoadingScreen } from './ui/LoadingScreen.js';
 import { StatsBar } from './ui/StatsBar.js';
 import { TherapistPanel } from './ui/TherapistPanel.js';
 import { Toaster } from './ui/Toaster.js';
 
+async function showLanding(): Promise<void> {
+  const configService = new GameConfigService();
+  const games = await configService.listGames().catch(() => []);
+  new LandingPage(mustGet('overlay-root'), games, (gameId) => {
+    configService
+      .fetchGame(gameId)
+      .then((config) => applyTheme(config.theme))
+      .catch(() => undefined);
+  });
+}
+
 async function bootstrap(): Promise<void> {
+  // A bare link (no session) gets the landing page instead of silently joining a default room.
+  if (!new URLSearchParams(window.location.search).has('session')) {
+    await showLanding();
+    return;
+  }
   const params = parseUrlParams();
   const loading = new LoadingScreen(mustGet('overlay-root'));
   const toaster = new Toaster(mustGet('toast-root'));
